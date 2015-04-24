@@ -1,0 +1,2 @@
+# dynamixel
+A dynamixel library.
