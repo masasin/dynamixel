@@ -511,6 +511,9 @@ class AX12(Dynamixel):
                  port="/dev/ttyUSB0", baudrate=1000000, timeout=5):
         super().__init__(dx_id, dx_type="AX-12", name=name,
                          port=port, baudrate=baudrate, timeout=timeout)
+        if self.model_number != 12:
+            self.close()
+            raise DynamixelError("Not an AX-12!")
 
     @property
     def down_calibration(self):
@@ -629,6 +632,9 @@ class MX28(Dynamixel):
                  port="/dev/ttyUSB0", baudrate=1000000, timeout=5):
         super().__init__(dx_id, dx_type="MX-28", name=name,
                          port=port, baudrate=baudrate, timeout=timeout)
+        if self.model_number != 29:
+            self.close()
+            raise DynamixelError("Not an MX-28!")
 
     @property
     def multiturn_offset(self):
