@@ -121,10 +121,6 @@ class Dynamixel(object):
     def __init__(self, dx_id, dx_type="Dynamixel", name="Dynamixel",
                  port="/dev/ttyUSB0", baudrate=1000000, timeout=5):
         self._verify_id(dx_id)
-        if dx_id in Dynamixel.dx_ids:
-            raise DynamixelError("ID# {dx_id} is already registered!".format(
-                dx_id=dx_id))
-
         self.dx_type = dx_type
         self._dx_id = dx_id
         self.name = name
@@ -179,7 +175,13 @@ class Dynamixel(object):
         self._interact(packet)
 
     def reset(self):
+        if 1 in Dynamixel.dx_ids and self.dx_id != 1:
+            raise DynamixelError("Resetting would conflict with Dynamixel #1.")
+        current_id = self.dx_id
         self._interact([self._instructions["reset"]])
+        time.sleep(0.25)
+        self._dx_id = 1
+        self.dx_id = current_id
 
     @property
     def model_number(self):
@@ -195,8 +197,12 @@ class Dynamixel(object):
 
     @dx_id.setter
     def dx_id(self, new_id):
-        self._dx_id = new_id
+        self._verify_id(new_id)
+        old_id = self.dx_id
         self.write("id", new_id)
+        self._dx_id = new_id
+        Dynamixel.dx_ids.remove(old_id)
+        Dynamixel.dx_ids.append(new_id)
 
     @property
     def baudrate(self):
@@ -216,20 +222,40 @@ class Dynamixel(object):
         self.write("return_delay", value / 2)
 
     @property
-    def cw_limit(self):
+    def cw_limit_raw(self):
         return self.read("cw_limit")
 
-    @cw_limit.setter
-    def cw_limit(self, limit):
+    @cw_limit_raw.setter
+    def cw_limit_raw(self, limit):
         self.write("cw_limit", limit)
 
     @property
-    def ccw_limit(self):
+    def cw_limit(self):
+        alpha = self._max_turn_angle / self._register_maxima["cw_limit"]
+        return self.cw_limit_raw * alpha
+
+    @cw_limit.setter
+    def cw_limit(self, deg):
+        alpha = self._max_turn_angle / self._register_maxima["cw_limit"]
+        self.cw_limit_raw = deg / alpha
+
+    @property
+    def ccw_limit_raw(self):
         return self.read("ccw_limit")
+
+    @ccw_limit_raw.setter
+    def ccw_limit_raw(self, limit):
+        self.write("ccw_limit", limit)
+
+    @property
+    def ccw_limit(self):
+        alpha = self._max_turn_angle / self._register_maxima["ccw_limit"]
+        return self.ccw_limit_raw * alpha
 
     @ccw_limit.setter
     def ccw_limit(self, limit):
-        self.write("ccw_limit", limit)
+        alpha = self._max_turn_angle / self._register_maxima["ccw_limit"]
+        self.ccw_limit_raw / alpha
     
     @property
     def limits(self):
@@ -328,20 +354,22 @@ class Dynamixel(object):
         self.write("led", value)
 
     @property
-    def goal(self):
+    def goal_raw(self):
         return self.read("goal_position")
 
-    @goal.setter
-    def goal(self, goal):
+    @goal_raw.setter
+    def goal_raw(self, goal):
         self.write("goal_position", goal)
 
     @property
-    def goal_degrees(self):
-        return self.goal * 300 / 1023
+    def goal(self):
+        alpha = self._max_turn_angle / self._register_maxima["goal_position"]
+        return self.goal_raw * alpha
 
-    @goal_degrees.setter
-    def goal_degrees(self, deg):
-        self.goal = deg * 1023 / 300
+    @goal.setter
+    def goal(self, deg):
+        alpha = self._max_turn_angle / self._register_maxima["goal_position"]
+        self.goal_raw = deg / alpha
 
     @property
     def moving_speed(self):
@@ -368,12 +396,13 @@ class Dynamixel(object):
         self.write("torque_limit", torque_limit)
 
     @property
-    def position(self):
+    def position_raw(self):
         return self.read("present_position")
 
     @property
-    def position_degrees(self):
-        return self.position * 300 / 1023
+    def position(self):
+        alpha = self._max_turn_angle / self._register_maxima["goal_position"]
+        return self.position_raw * alpha
 
     @property
     def speed(self):
@@ -431,25 +460,40 @@ class Dynamixel(object):
         if not 0 <= dx_id <= self._register_maxima["id"]:
             raise DynamixelError("ID {dx_id} is not legal!".format(dx_id=dx_id))
 
+        if dx_id in Dynamixel.dx_ids:
+            raise DynamixelError("ID# {dx_id} is already registered!".format(
+                dx_id=dx_id))
+
+
     @staticmethod
     def _checksum(s):
         return (~sum(s)) & 0xFF
 
     def close(self):
+        Dynamixel.dx_ids.remove(self.dx_id)
         self.ser.close()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self):
+        self.close()
+
     def __del__(self):
-        Dynamixel.dx_ids.remove(self.dx_id)
         self.close()
 
     def __repr__(self):
         return "{dx_type} Dynamixel (ID# {dx_id}): {name}".format(
                 dx_type=self.dx_type, dx_id=self.dx_id, name=self.name)
 
+    def __str__(self):
+        return self.name
+
 
 class AX12(Dynamixel):
     _registers = Dynamixel._registers.copy()
     _register_maxima = Dynamixel._register_maxima.copy()
+    _max_turn_angle = 300
 
     _registers.update({"down_calibration": 0x14,
                        "up_calibration": 0x16,
@@ -556,6 +600,7 @@ class MX28(Dynamixel):
     _register_minima = Dynamixel._register_minima.copy()
     _register_maxima = Dynamixel._register_maxima.copy()
     _two_byte_registers = Dynamixel._two_byte_registers.copy()
+    _max_turn_angle = 360
 
     _registers.update({"multiturn_offset": 0x14,
                        "resolution_divider": 0x16,
@@ -569,10 +614,13 @@ class MX28(Dynamixel):
                              "resolution_divider": 1})
 
     _register_maxima.update({"multiturn_offset": 24576,
+                             "cw_limit": 4095,
+                             "ccw_limit": 4095,
                              "resolution_divider": 4,
                              "p_gain": 254,
                              "i_gain": 254,
                              "d_gain": 254,
+                             "goal_position": 4095,
                              "goal_acceleration": 254})
 
     _two_byte_registers.extend(["multiturn_offset", "present_current"])
@@ -636,4 +684,4 @@ class MX28(Dynamixel):
 
 if __name__ == "__main__":
     dx = AX12(0)
-    dx.led = True
+    dx.led = False
