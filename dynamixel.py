@@ -8,6 +8,7 @@ Currently supported Dynamixel types are:
     - AX-12
     - MX-28
 """
+from collections import ChainMap
 import serial
 import time
 
@@ -748,21 +749,29 @@ class Dynamixel(object):
 
 
 class AX12(Dynamixel):
-    _registers = Dynamixel._registers.copy()
-    _register_maxima = Dynamixel._register_maxima.copy()
     _max_turn_angle = 300
 
-    _registers.update({"down_calibration": 0x14,
-                       "up_calibration": 0x16,
-                       "cw_compliance_margin": 0x1A,
-                       "ccw_compliance_margin": 0x1B,
-                       "cw_compliance_slope": 0x1C,
-                       "ccw_compliance_slope": 0x1D})
+    _registers = ChainMap(
+        {
+            "down_calibration": 0x14,
+            "up_calibration": 0x16,
+            "cw_compliance_margin": 0x1A,
+            "ccw_compliance_margin": 0x1B,
+            "cw_compliance_slope": 0x1C,
+            "ccw_compliance_slope": 0x1D
+        },
+        Dynamixel._registers
+    )
 
-    _register_maxima.update({"cw_compliance_margin": 254,
-                             "ccw_compliance_margin": 254,
-                             "cw_compliance_slope": 254,
-                             "ccw_compliance_slope": 254})
+    _register_maxima = ChainMap(
+        {
+            "cw_compliance_margin": 254,
+            "ccw_compliance_margin": 254,
+            "cw_compliance_slope": 254,
+            "ccw_compliance_slope": 254
+        },
+        Dynamixel._register_maxima
+    )
 
     def __init__(self, dx_id, name="AX-12",
                  port="/dev/ttyUSB0", baudrate=1000000, timeout=5):
@@ -856,34 +865,49 @@ class AX12(Dynamixel):
 
 
 class MX28(Dynamixel):
-    _registers = Dynamixel._registers.copy()
-    _register_minima = Dynamixel._register_minima.copy()
-    _register_maxima = Dynamixel._register_maxima.copy()
-    _two_byte_registers = Dynamixel._two_byte_registers.copy()
     _max_turn_angle = 360
 
-    _registers.update({"multiturn_offset": 0x14,
-                       "resolution_divider": 0x16,
-                       "p_gain": 0x1A,
-                       "i_gain": 0x1B,
-                       "d_gain": 0x1C,
-                       "present_current": 0x38,
-                       "goal_acceleration": 0x49})
+    _register_minima = Dynamixel._register_minima.copy()
+    _register_maxima = Dynamixel._register_maxima.copy()
 
-    _register_minima.update({"multiturn_offset": -24576,
-                             "resolution_divider": 1})
+    _registers = ChainMap(
+        {
+            "multiturn_offset": 0x14,
+            "resolution_divider": 0x16,
+            "p_gain": 0x1A,
+            "i_gain": 0x1B,
+            "d_gain": 0x1C,
+            "present_current": 0x38,
+            "goal_acceleration": 0x49
+        },
+        Dynamixel._registers
+    )
 
-    _register_maxima.update({"multiturn_offset": 24576,
-                             "cw_limit": 4095,
-                             "ccw_limit": 4095,
-                             "resolution_divider": 4,
-                             "p_gain": 254,
-                             "i_gain": 254,
-                             "d_gain": 254,
-                             "goal_position": 4095,
-                             "goal_acceleration": 254})
+    _register_minima = ChainMap(
+        {
+            "multiturn_offset": -24576,
+            "resolution_divider": 1
+        },
+        Dynamixel._register_minima
+    )
 
-    _two_byte_registers.update(["multiturn_offset", "present_current"])
+    _register_maxima = ChainMap(
+        {
+            "multiturn_offset": 24576,
+            "cw_limit": 4095,
+            "ccw_limit": 4095,
+            "resolution_divider": 4,
+            "p_gain": 254,
+            "i_gain": 254,
+            "d_gain": 254,
+            "goal_position": 4095,
+            "goal_acceleration": 254
+        },
+        Dynamixel._register_maxima
+    )
+
+    _two_byte_registers = Dynamixel._two_byte_registers | {"multiturn_offset",
+                                                           "present_current"}
 
     def __init__(self, dx_id, name="MX-28",
                  port="/dev/ttyUSB0", baudrate=1000000, timeout=5):
