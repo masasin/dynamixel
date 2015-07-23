@@ -1,15 +1,84 @@
-import sys
+# (C) 2016  Jean Nassar
+# Released under the GNU General Public License, version 3
+"""
+Module for interfacing with Dynamixels.
+
+Currently supported Dynamixel types are:
+
+    - AX-12
+    - MX-28
+"""
 import serial
 import time
 
 
 class DynamixelError(Exception):
-    pass
+    """Custom exception class"""
 
 
 class Dynamixel(object):
+    """
+    A parent Dynamixel class which contains common functions.
+
+    Parameters
+    ----------
+    dx_id : int
+        The current ID of the Dynamixel
+    dx_type : str, optional
+        The type of the Dynamixel. Default is "Dynamixel".
+    name : str, optional
+        The name of the Dynamixel. Default is "Dynamixel".
+    port : str, optional
+        The port to which the Dynamixel is connected. Default is "/dev/ttyUSB0".
+    baudrate : int, optional
+        The communication baudrate of the Dynamixel. Default is 1,000,000.
+    timeout : int, optional
+        The length of time, in seconds, after which the communication with the
+        Dynamixel is interrupted if no response is received. Default is 5
+        seconds.
+
+    Attributes
+    ----------
+    errors : dict
+        Contains all errors.
+
+        **Dictionary format :** {id (int): name (str)}
+    dx_ids : list of int
+        Contains the IDs of all Dynamixels currently connected.
+
+    """
     class Response(object):
+        """
+        A response object for communicating with the Dynamixel.
+
+        The response object is used to validate the data for safety purposes.
+
+        Parameters
+        ----------
+        data : list of byte
+            The data received from the Dynamixel.
+
+        Attributes
+        ----------
+        data : list of byte
+            The data received from the Dynamixel.
+        response_id : byte
+            The ID of the response.
+        length : byte
+            The length of the response.
+        errors : list of str
+            The errors raised by the response.
+        value : int
+            The value returned by the data.
+
+        Raises
+        ------
+        DynamixelError
+            If the data received is bad, or if there are errors.
+
+        """
         def __init__(self, data):
+            # Check data integrity
             if not data or 0xff not in data[:2]:
                 raise DynamixelError("Bad Header! ({data})".format(data=data))
             if Dynamixel._checksum(data[2:-1]) != data[-1]:
@@ -19,102 +88,125 @@ class Dynamixel(object):
             self.data = data
             self.response_id, self.length = data[2:4]
             self.errors = []
+
+            # Check for errors
             for k in Dynamixel.errors.keys():
                 if data[4] & k != 0:
                     self.errors.append(Dynamixel.errors[k])
+            if self.errors:
+                raise DynamixelError("ERRORS: {e}".format(e=self.errors))
 
+            # Retrieve data
             requested_data = self.data[5:-1]
-            
+
             if not requested_data:
                 return
             elif len(requested_data) == 1:
                 self.value = requested_data[0]
-            elif len(requested_data) == 2:
+            elif len(requested_data) == 2:  # Little endian
                 self.value = (requested_data[1] << 8) + requested_data[0]
             else:
                 raise DynamixelError("Bad number of values returned!")
 
         def __str__(self):
+            """String representation of the data."""
             return " ".join([hex(i) for i in self.data])
 
-        def verify(self):
-            if self.errors:
-                raise DynamixelError("ERRORS: {e}".format(e=self.errors))
-            return self
+    # Instructions that can be sent to the Dynamixel
+    _instructions = {
+        "ping": 0x01,
+        "read_data": 0x02,
+        "write_data": 0x03,
+        "reg_write": 0x04,
+        "action": 0x05,
+        "reset": 0x06,
+        "sync_write": 0x83
+    }
 
-    _instructions = {"ping": 0x01,
-                     "read_data": 0x02,
-                     "write_data": 0x03,
-                     "reg_write": 0x04,
-                     "action": 0x05,
-                     "reset": 0x06,
-                     "sync_write": 0x83}
+    # Registers common to all Dynamixel types
+    _registers = {
+        "model_number": 0x00,
+        "firmware_version": 0x02,
+        "id": 0x03,
+        "baudrate": 0x04,
+        "return_delay": 0x05,
+        "cw_limit": 0x06,
+        "ccw_limit": 0x08,
+        "max_temperature": 0x0B,
+        "min_voltage": 0x0C,
+        "max_voltage": 0x0D,
+        "max_torque": 0x0E,
+        "status_return_level": 0x10,
+        "alarm_led": 0x11,
+        "alarm_shutdown": 0x12,
+        "torque_enable": 0x18,
+        "led": 0x19,
+        "goal_position": 0x1E,
+        "moving_speed": 0x20,
+        "torque_limit": 0x22,
+        "present_position": 0x24,
+        "present_speed": 0x26,
+        "present_load": 0x28,
+        "present_voltage": 0x2A,
+        "present_temperature": 0x2B,
+        "registered_instruction": 0x2C,
+        "moving": 0x2E,
+        "lock": 0x2F,
+        "punch": 0x30
+    }
 
-    _registers = {"model_number": 0x00,
-                  "firmware_version": 0x02,
-                  "id": 0x03,
-                  "baudrate": 0x04,
-                  "return_delay": 0x05,
-                  "cw_limit": 0x06,
-                  "ccw_limit": 0x08,
-                  "max_temperature": 0x0B,
-                  "min_voltage": 0x0C,
-                  "max_voltage": 0x0D,
-                  "max_torque": 0x0E,
-                  "status_return_level": 0x10,
-                  "alarm_led": 0x11,
-                  "alarm_shutdown": 0x12,
-                  "torque_enable": 0x18,
-                  "led": 0x19,
-                  "goal_position": 0x1E,
-                  "moving_speed": 0x20,
-                  "torque_limit": 0x22,
-                  "present_position": 0x24,
-                  "present_speed": 0x26,
-                  "present_load": 0x28,
-                  "present_voltage": 0x2A,
-                  "present_temperature": 0x2B,
-                  "registered_instruction": 0x2C,
-                  "moving": 0x2E,
-                  "lock": 0x2F,
-                  "punch": 0x30}
-
+    # Minimum limits of registers
     _register_minima = {}
 
-    _register_maxima = {"id": 253,
-                        "baudrate": 254,
-                        "return_delay": 254,
-                        "cw_limit": 1023,
-                        "ccw_limit": 1023,
-                        "max_temperature": 150,
-                        "min_voltage": 250,
-                        "max_voltage": 250,
-                        "max_torque": 1023,
-                        "status_return_level": 2,
-                        "alarm_led": 127,
-                        "alarm_shutdown": 127,
-                        "torque_enable": 1,
-                        "led": 1,
-                        "goal_position": 1023,
-                        "moving_speed": 1023,
-                        "torque_limit": 1023,
-                        "registered_instruction": 1,
-                        "lock": 1,
-                        "punch": 1023}
+    # Maximum limits of registers
+    _register_maxima = {
+        "id": 253,
+        "baudrate": 254,
+        "return_delay": 254,
+        "cw_limit": 1023,
+        "ccw_limit": 1023,
+        "max_temperature": 150,
+        "min_voltage": 250,
+        "max_voltage": 250,
+        "max_torque": 1023,
+        "status_return_level": 2,
+        "alarm_led": 127,
+        "alarm_shutdown": 127,
+        "torque_enable": 1,
+        "led": 1,
+        "goal_position": 1023,
+        "moving_speed": 1023,
+        "torque_limit": 1023,
+        "registered_instruction": 1,
+        "lock": 1,
+        "punch": 1023
+    }
 
-    _two_byte_registers = ["model_number",
-                           "cw_limit", "ccw_limit", "max_torque",
-                           "goal_position", "moving_speed", "torque_limit",
-                           "present_position", "present_speed", "present_load",
-                           "punch"]
+    # Registers that are two bytes long
+    _two_byte_registers = {
+        "model_number",
+        "cw_limit",
+        "ccw_limit",
+        "max_torque",
+        "goal_position",
+        "moving_speed",
+        "torque_limit",
+        "present_position",
+        "present_speed",
+        "present_load",
+        "punch"
+    }
 
-    errors = {1:  "InputVoltage",
-              2:  "AngleLimit",
-              4:  "Overheating",
-              8:  "Range",
-              16: "Checksum",
-              32: "Overload",
-              64: "Instruction"}
+    # Error bits
+    errors = {
+        1:  "InputVoltage",
+        2:  "AngleLimit",
+        4:  "Overheating",
+        8:  "Range",
+        16: "Checksum",
+        32: "Overload",
+        64: "Instruction"
+    }
 
     dx_ids = []
 
@@ -142,8 +234,8 @@ class Dynamixel(object):
         time.sleep(0.05)
 
         res = self.ser.read(self.ser.inWaiting())
-        return Dynamixel.Response([i for i in res]).verify()
-    
+        return Dynamixel.Response([i for i in res])
+
     def read(self, register):
         packet = []
         packet.append(self._instructions["read_data"])
@@ -153,7 +245,7 @@ class Dynamixel(object):
 
     def write(self, register, value):
         length = self._register_length(register)
-        
+
         if register in self._register_minima:
             min_value = self._register_minima[register]
         else:
@@ -256,7 +348,7 @@ class Dynamixel(object):
     def ccw_limit(self, limit):
         alpha = self._max_turn_angle / self._register_maxima["ccw_limit"]
         self.ccw_limit_raw / alpha
-    
+
     @property
     def limits(self):
         return self.cw_limit, self.ccw_limit
@@ -276,7 +368,7 @@ class Dynamixel(object):
 
     @property
     def continuous_rotation(self):
-        return not self.cw_limit and not self.ccw_limit 
+        return not self.cw_limit and not self.ccw_limit
 
     def engage_continuous_rotation(self):
         self.limits = (0, 0)
@@ -284,7 +376,7 @@ class Dynamixel(object):
     @property
     def max_temperature(self):
         return self.read("max_temperature")
-    
+
     @max_temperature.setter
     def max_temperature(self, value):
         self.write("max_temperature", value)
@@ -292,7 +384,7 @@ class Dynamixel(object):
     @property
     def min_voltage(self):
         return self.read("min_voltage") / 10
-    
+
     @min_voltage.setter
     def min_voltage(self, value):
         self.write("min_voltage", value * 10)
@@ -300,7 +392,7 @@ class Dynamixel(object):
     @property
     def max_voltage(self):
         return self.read("max_voltage") / 10
-    
+
     @max_voltage.setter
     def max_voltage(self, value):
         self.write("max_voltage", value * 10)
@@ -308,7 +400,7 @@ class Dynamixel(object):
     @property
     def max_torque(self):
         return self.read("max_torque")
-    
+
     @max_torque.setter
     def max_torque(self, value):
         self.write("max_torque", value)
@@ -386,7 +478,7 @@ class Dynamixel(object):
     @moving_speed_rpm.setter
     def moving_speed_rpm(self, rpm):
         self.moving_speed = rpm * 1023 / 114
-    
+
     @property
     def torque_limit(self):
         return self.read("torque_limit")
@@ -464,7 +556,6 @@ class Dynamixel(object):
             raise DynamixelError("ID# {dx_id} is already registered!".format(
                 dx_id=dx_id))
 
-
     @staticmethod
     def _checksum(s):
         return (~sum(s)) & 0xFF
@@ -484,7 +575,7 @@ class Dynamixel(object):
 
     def __repr__(self):
         return "{dx_type} Dynamixel (ID# {dx_id}): {name}".format(
-                dx_type=self.dx_type, dx_id=self.dx_id, name=self.name)
+            dx_type=self.dx_type, dx_id=self.dx_id, name=self.name)
 
     def __str__(self):
         return self.name
@@ -506,7 +597,7 @@ class AX12(Dynamixel):
                              "ccw_compliance_margin": 254,
                              "cw_compliance_slope": 254,
                              "ccw_compliance_slope": 254})
-   
+
     def __init__(self, dx_id, name="AX-12",
                  port="/dev/ttyUSB0", baudrate=1000000, timeout=5):
         super().__init__(dx_id, dx_type="AX-12", name=name,
@@ -597,7 +688,7 @@ class AX12(Dynamixel):
         if ccw_slope is not None:
             self.ccw_compliance_slope = ccw_slope
 
-    
+
 class MX28(Dynamixel):
     _registers = Dynamixel._registers.copy()
     _register_minima = Dynamixel._register_minima.copy()
@@ -626,7 +717,7 @@ class MX28(Dynamixel):
                              "goal_position": 4095,
                              "goal_acceleration": 254})
 
-    _two_byte_registers.extend(["multiturn_offset", "present_current"])
+    _two_byte_registers.update(["multiturn_offset", "present_current"])
 
     def __init__(self, dx_id, name="MX-28",
                  port="/dev/ttyUSB0", baudrate=1000000, timeout=5):
