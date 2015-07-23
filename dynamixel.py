@@ -1,7 +1,7 @@
 # (C) 2016  Jean Nassar
 # Released under the GNU General Public License, version 3
 """
-Module for interfacing with Dynamixels.
+Module for interfacing with Dynamixels (Dx).
 
 Currently supported Dynamixel types are:
 
@@ -23,45 +23,59 @@ class Dynamixel(object):
     Parameters
     ----------
     dx_id : int
-        The current ID of the Dynamixel
+        The current ID of the Dx.
     dx_type : str, optional
-        The type of the Dynamixel. Default is "Dynamixel".
+        The type of the Dx. Default is "Dynamixel".
     name : str, optional
-        The name of the Dynamixel. Default is "Dynamixel".
+        The name of the Dx. Default is "Dynamixel".
     port : str, optional
-        The port to which the Dynamixel is connected. Default is "/dev/ttyUSB0".
+        The port to which the Dx is connected. Default is "/dev/ttyUSB0".
+        Windows users can use COM ports instead.
     baudrate : int, optional
-        The communication baudrate of the Dynamixel. Default is 1,000,000.
+        The communication baudrate of the Dx. Default is 1,000,000.
     timeout : int, optional
         The length of time, in seconds, after which the communication with the
-        Dynamixel is interrupted if no response is received. Default is 5
+        Dx is interrupted if no response is received. Default is 5
         seconds.
 
     Attributes
     ----------
+    dx_type : str
+        The type of the Dx.
+    name : str
+        The name of the Dx.
+    port : str
+        The port to which the Dx is connected.
+    ser : Serial
+        The serial device to communicate with the Dx.
     errors : dict
-        Contains all errors.
+        Contains all error bits and their meanings.
 
         **Dictionary format :** {id (int): name (str)}
     dx_ids : list of int
-        Contains the IDs of all Dynamixels currently connected.
+        Contains the IDs of all Dx currently connected.
+
+    Raises
+    ------
+    DynamixelError
+        If the ID is wrong or is already registered.
 
     """
     class Response(object):
         """
-        A response object for communicating with the Dynamixel.
+        A response object for communicating with the Dx.
 
         The response object is used to validate the data for safety purposes.
 
         Parameters
         ----------
         data : list of byte
-            The data received from the Dynamixel.
+            The data received from the Dx.
 
         Attributes
         ----------
         data : list of byte
-            The data received from the Dynamixel.
+            The data received from the Dx.
         response_id : byte
             The ID of the response.
         length : byte
@@ -228,6 +242,20 @@ class Dynamixel(object):
         Dynamixel.dx_ids.append(dx_id)
 
     def _interact(self, packet):
+        """
+        Communicate with the Dx.
+
+        Parameters
+        ----------
+        packet : list of byte
+            The packet to send to the Dx.
+
+        Returns
+        -------
+        Response
+            The response from the Dx.
+
+        """
         payload = [self._dx_id, len(packet)+1] + packet
         to_write = [0xFF, 0xFF] + payload + [Dynamixel._checksum(payload)]
         self.ser.write(bytes(to_write))
@@ -237,6 +265,20 @@ class Dynamixel(object):
         return Dynamixel.Response([i for i in res])
 
     def read(self, register):
+        """
+        Read the value of a register.
+
+        Parameters
+        ----------
+        register : str
+            The name of the register to be read.
+
+        Returns
+        -------
+        int
+            The value of the register.
+
+        """
         packet = []
         packet.append(self._instructions["read_data"])
         packet.append(self._registers[register])
@@ -244,6 +286,22 @@ class Dynamixel(object):
         return self._interact(packet).value
 
     def write(self, register, value):
+        """
+        Write a value to a register.
+
+        Parameters
+        ----------
+        register : str
+            The name of the register to be written to.
+        value : int
+            The value to write to the register.
+
+        Raises
+        ------
+        DynamixelError
+            If the value supplied is illegal.
+
+        """
         length = self._register_length(register)
 
         if register in self._register_minima:
@@ -267,6 +325,17 @@ class Dynamixel(object):
         self._interact(packet)
 
     def reset(self):
+        """
+        Send a reset command to the Dx.
+
+        Resetting also changes the Dx ID to 1.
+
+        Raises
+        ------
+        DynamixelError
+            If resetting would cause a conflict.
+
+        """
         if 1 in Dynamixel.dx_ids and self.dx_id != 1:
             raise DynamixelError("Resetting would conflict with Dynamixel #1.")
         current_id = self.dx_id
@@ -277,18 +346,22 @@ class Dynamixel(object):
 
     @property
     def model_number(self):
+        """Get the model number."""
         return self.read("model_number")
 
     @property
     def firmware_version(self):
+        """Get the firmware version."""
         return self.read("firmware_version")
 
     @property
     def dx_id(self):
+        """Get the Dx ID."""
         return self.read("id")
 
     @dx_id.setter
     def dx_id(self, new_id):
+        """Set the Dx ID."""
         self._verify_id(new_id)
         old_id = self.dx_id
         self.write("id", new_id)
@@ -298,63 +371,89 @@ class Dynamixel(object):
 
     @property
     def baudrate(self):
+        """
+        Get the baudrate.
+
+        Note that the baudrate returned is the actual baudrate, and not the
+        raw value of the baudrate register.
+
+        """
         return 2000000 / (self.read("baudrate") + 1)
 
     @baudrate.setter
     def baudrate(self, baudrate):
+        """
+        Set the baudrate.
+
+        Note that the baudrate supplied should be the intended final baudrate,
+        and not the raw value of the baudrate register.
+
+        """
         value = 2000000 / baudrate - 1
         self.write("baudrate", value)
 
     @property
-    def return_delay(self):  # us
+    def return_delay(self):
+        """Get the return delay, in microseconds."""
         return 2 * self.read("return_delay")
 
     @return_delay.setter
     def return_delay(self, value):
+        """Set the return delay, in microseconds."""
         self.write("return_delay", value / 2)
 
     @property
     def cw_limit_raw(self):
+        """Get the raw value of the clockwise limit register."""
         return self.read("cw_limit")
 
     @cw_limit_raw.setter
     def cw_limit_raw(self, limit):
+        """Set the raw value of the clockwise limit register."""
         self.write("cw_limit", limit)
 
     @property
     def cw_limit(self):
+        """Get the clockwise limit, in degrees."""
         alpha = self._max_turn_angle / self._register_maxima["cw_limit"]
         return self.cw_limit_raw * alpha
 
     @cw_limit.setter
     def cw_limit(self, deg):
+        """Set the clockwise limit, in degrees."""
         alpha = self._max_turn_angle / self._register_maxima["cw_limit"]
         self.cw_limit_raw = deg / alpha
 
     @property
     def ccw_limit_raw(self):
+        """Get the raw value of the counterclockwise limit register."""
         return self.read("ccw_limit")
 
     @ccw_limit_raw.setter
     def ccw_limit_raw(self, limit):
+        """Set the raw value of the counterclockwise limit register."""
         self.write("ccw_limit", limit)
 
     @property
     def ccw_limit(self):
+        """Get the counterclockwise limit, in degrees."""
         alpha = self._max_turn_angle / self._register_maxima["ccw_limit"]
         return self.ccw_limit_raw * alpha
 
     @ccw_limit.setter
     def ccw_limit(self, limit):
+        """Set the counterclockwise limit, in degrees."""
         alpha = self._max_turn_angle / self._register_maxima["ccw_limit"]
         self.ccw_limit_raw / alpha
 
     @property
     def limits(self):
+        """Get the clockwise and counterclockwise limits, in degrees."""
         return self.cw_limit, self.ccw_limit
 
     @limits.setter
     def limits(self, limits):
+        """Set the clockwise and counterclockwise limits, in degrees."""
         try:
             cw_limit = limits[0]
             ccw_limit = limits[1]
@@ -368,187 +467,247 @@ class Dynamixel(object):
 
     @property
     def continuous_rotation(self):
+        """True if continous rotation mode is enabled."""
         return not self.cw_limit and not self.ccw_limit
 
     def engage_continuous_rotation(self):
+        """Enable continous rotation mode."""
         self.limits = (0, 0)
 
     @property
     def max_temperature(self):
+        """Get the maximum operating temperature, in degrees celsius."""
         return self.read("max_temperature")
 
     @max_temperature.setter
     def max_temperature(self, value):
+        """Set the maximum operating temperature, in degrees celsius."""
         self.write("max_temperature", value)
 
     @property
     def min_voltage(self):
+        """Get the minimum operating voltage."""
         return self.read("min_voltage") / 10
 
     @min_voltage.setter
     def min_voltage(self, value):
+        """Set the minimum operating voltage."""
         self.write("min_voltage", value * 10)
 
     @property
     def max_voltage(self):
+        """Get the maximum operating voltage."""
         return self.read("max_voltage") / 10
 
     @max_voltage.setter
     def max_voltage(self, value):
+        """Set the maximum operating voltage."""
         self.write("max_voltage", value * 10)
 
     @property
     def max_torque(self):
+        """Get the maximum operating torque."""
         return self.read("max_torque")
 
     @max_torque.setter
     def max_torque(self, value):
+        """Set the maximum operating torque."""
         self.write("max_torque", value)
 
     @property
     def status_return_level(self):
+        """Get the status return level."""
         return self.read("status_return_level")
 
     @status_return_level.setter
     def status_return_level(self, value):
+        """Set the status return level."""
         self.write("status_return_level", value)
 
     @property
     def alarm_led(self):
+        """Read the alarm LED register."""
         return self.read("alarm_led")
 
     @alarm_led.setter
     def alarm_led(self, value):
+        """Write to the alarm LED register."""
         self.write("alarm_led", value)
 
     @property
     def alarm_shutdown(self):
+        """Read the alarm shutdown register."""
         return self.read("alarm_shutdown")
 
     @alarm_shutdown.setter
     def alarm_shutdown(self, value):
+        """Write to the alarm shutdown register."""
         self.write("alarm_shutdown", value)
 
     @property
     def torque_enable(self):
+        """1 if torque is enabled."""
         return self.read("torque_enable")
 
     @torque_enable.setter
     def torque_enable(self, value):
+        """Enable or disable the torque."""
         self.write("torque_enable", value)
 
     @property
     def led(self):
+        """1 if the LED is on."""
         return self.read("led")
 
     @led.setter
     def led(self, value):
+        """Turn the LED on or off."""
         self.write("led", value)
 
     @property
     def goal_raw(self):
+        """Get the raw value of the goal position register."""
         return self.read("goal_position")
 
     @goal_raw.setter
     def goal_raw(self, goal):
+        """Set the raw value of the goal position register."""
         self.write("goal_position", goal)
 
     @property
     def goal(self):
+        """Get the goal position, in degrees."""
         alpha = self._max_turn_angle / self._register_maxima["goal_position"]
         return self.goal_raw * alpha
 
     @goal.setter
     def goal(self, deg):
+        """Set the goal position, in degrees."""
         alpha = self._max_turn_angle / self._register_maxima["goal_position"]
         self.goal_raw = deg / alpha
 
     @property
     def moving_speed(self):
+        """Get the raw value of the moving speed register."""
         return self.read("moving_speed")
 
     @moving_speed.setter
     def moving_speed(self, speed):
+        """Set the raw value of the moving speed register."""
         self.write("moving_speed", speed)
 
     @property
     def moving_speed_rpm(self):
+        """Get the moving speed, in RPM."""
         return self.moving_speed * 114 / 1023
 
     @moving_speed_rpm.setter
     def moving_speed_rpm(self, rpm):
+        """Set the moving speed, in RPM."""
         self.moving_speed = rpm * 1023 / 114
 
     @property
     def torque_limit(self):
+        """Read the torque limit register."""
         return self.read("torque_limit")
 
     @torque_limit.setter
     def torque_limit(self, torque_limit):
+        """Write to the torque limit register."""
         self.write("torque_limit", torque_limit)
 
     @property
     def position_raw(self):
+        """Get the raw value of the position register."""
         return self.read("present_position")
 
     @property
     def position(self):
+        """Get the position in degrees."""
         alpha = self._max_turn_angle / self._register_maxima["goal_position"]
         return self.position_raw * alpha
 
     @property
     def speed(self):
+        """Get the raw value of the speed register."""
         return self.read("present_speed")
 
     @property
     def speed_rpm(self):
+        """Get the speed in RPM."""
         speed = self.speed
         direction = speed >> 10
         return (speed & 1023) * 114 / 1023 * (1 if direction else -1)
 
     @property
     def load(self):
+        """Read the load register."""
         load = self.read("present_load")
         direction = load >> 10
         return load * (1 if direction else -1)
 
     @property
     def voltage(self):
+        """Get the voltage, in Volts."""
         return self.read("present_voltage") / 10
 
     @property
     def temperature(self):
+        """Get the temperature, in degrees celsius."""
         return self.read("present_temperature")
 
     @property
     def is_moving(self):
-        """Return True if the servo is currently moving."""
+        """True if the servo is currently moving."""
         return self.read("moving")
 
     @property
     def lock(self):
+        """True if the servo is locked."""
         return self.read("lock")
 
     @lock.setter
     def lock(self, value):
+        """Lock or unlock the servo."""
         self.write("lock", value)
 
     @property
     def punch(self):
+        """Read the punch register."""
         return self.read("punch")
 
     @punch.setter
     def punch(self, value):
+        """Write to the punch register."""
         self.write("punch", value)
 
     def wait_until_stopped(self):
+        """Do not send any commands until the Dx stops moving."""
         while self.is_moving:
             pass
 
     def _register_length(self, register):
+        """Return the length of the register."""
         return 2 if register in self._two_byte_registers else 1
 
     def _verify_id(self, dx_id):
+        """
+        Verify a Dynamixel ID.
+
+        The ID needs to be within the proper range, and a Dx with that ID must
+        not be currently registered.
+
+        Parameters
+        ----------
+        dx_id : int
+            The ID to verify.
+
+        Raises
+        ------
+        DynamixelError
+            If the ID cannot be used.
+
+        """
         if not 0 <= dx_id <= self._register_maxima["id"]:
             raise DynamixelError("ID {dx_id} is not legal!".format(dx_id=dx_id))
 
@@ -558,26 +717,45 @@ class Dynamixel(object):
 
     @staticmethod
     def _checksum(s):
+        """
+        Perform a checksum on a list of bytes.
+
+        Parameters
+        ----------
+        s : list of byte
+            The list of bytes to be checked.
+
+        Return
+        ------
+        The checksum of `s`.
+
+        """
         return (~sum(s)) & 0xFF
 
     def close(self):
+        """Close the connection to a Dx."""
         Dynamixel.dx_ids.remove(self.dx_id)
         self.ser.close()
 
     def __enter__(self):
+        """Context manager entry."""
         return self
 
     def __exit__(self):
+        """Context manager exit."""
         self.close()
 
     def __del__(self):
+        """Deletion."""
         self.close()
 
     def __repr__(self):
+        """Representation."""
         return "{dx_type} Dynamixel (ID# {dx_id}): {name}".format(
             dx_type=self.dx_type, dx_id=self.dx_id, name=self.name)
 
     def __str__(self):
+        """String representation."""
         return self.name
 
 
