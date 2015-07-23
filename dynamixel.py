@@ -371,24 +371,12 @@ class Dynamixel(object):
 
     @property
     def baudrate(self):
-        """
-        Get the baudrate.
-
-        Note that the baudrate returned is the actual baudrate, and not the
-        raw value of the baudrate register.
-
-        """
+        """Get the baudrate."""
         return 2000000 / (self.read("baudrate") + 1)
 
     @baudrate.setter
     def baudrate(self, baudrate):
-        """
-        Set the baudrate.
-
-        Note that the baudrate supplied should be the intended final baudrate,
-        and not the raw value of the baudrate register.
-
-        """
+        """Set the baudrate."""
         value = 2000000 / baudrate - 1
         self.write("baudrate", value)
 
