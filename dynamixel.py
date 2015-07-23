@@ -36,7 +36,7 @@ class Dynamixel(object):
         The communication baudrate of the Dx. Default is 1,000,000.
     timeout : int, optional
         The length of time, in seconds, after which the communication with the
-        Dx is interrupted if no response is received. Default is 5
+        Dx is interrupted if no response is received. Default is 5.
         seconds.
 
     Attributes
@@ -749,6 +749,49 @@ class Dynamixel(object):
 
 
 class AX12(Dynamixel):
+    """
+    The AX-12 series of Dx.
+
+    Parameters
+    ----------
+    dx_id : int
+        The current ID of the Dx.
+    name : str, optional
+        The name of the Dx. Default is "AX-12".
+    port : str, optional
+        The port to which the Dx is connected. Default is "/dev/ttyUSB0".
+        Windows users can use COM ports instead.
+    baudrate : int, optional
+        The communication baudrate of the Dx. Default is 1,000,000.
+    timeout : int, optional
+        The length of time, in seconds, after which the communication with the
+        Dx is interrupted if no response is received. Default is 5.
+        seconds.
+
+    Attributes
+    ----------
+    dx_type : str
+        The type of the Dx.
+    name : str
+        The name of the Dx.
+    port : str
+        The port to which the Dx is connected.
+    ser : Serial
+        The serial device to communicate with the Dx.
+    errors : dict
+        Contains all error bits and their meanings.
+
+        **Dictionary format :** {id (int): name (str)}
+    dx_ids : list of int
+        Contains the IDs of all Dx currently connected.
+
+    Raises
+    ------
+    DynamixelError
+        If the ID is wrong or is already registered, or if the Dynamixel with
+        that ID is not an AX-12.
+
+    """
     _max_turn_angle = 300
 
     _registers = ChainMap(
@@ -783,42 +826,52 @@ class AX12(Dynamixel):
 
     @property
     def down_calibration(self):
+        """Read the down calibration register."""
         return self.read("down_calibration")
 
     @down_calibration.setter
     def down_calibration(self, value):
+        """Write to the down calibration register."""
         self.write("down_calibration", value)
 
     @property
     def up_calibration(self):
+        """Read the up calibration register."""
         return self.read("up_calibration")
 
     @up_calibration.setter
     def up_calibration(self, value):
+        """Write to the up calibration register."""
         self.write("up_calibration", value)
 
     @property
     def cw_compliance_margin(self):
+        """Read the clockwise compliance margin register."""
         return self.read("cw_compliance_margin")
 
     @cw_compliance_margin.setter
     def cw_compliance_margin(self, margin):
+        """Write to the clockwise compliance margin register."""
         self.write("cw_compliance_margin", margin)
 
     @property
     def ccw_compliance_margin(self):
+        """Read the counterclockwise compliance margin register."""
         return self.read("ccw_compliance_margin")
 
     @ccw_compliance_margin.setter
     def ccw_compliance_margin(self, margin):
+        """Write to the counterclockwise compliance margin register."""
         self.write("ccw_compliance_margin", margin)
 
     @property
     def compliance_margins(self):
+        """Return the clockwise and counterclockwise compliance margins."""
         return self.cw_compliance_margin, self.ccw_compliance_margin
 
     @compliance_margins.setter
     def compliance_margins(self, margins):
+        """Set the clockwise and counterclockwise compliance margins."""
         try:
             cw_margin = margins[0]
             ccw_margin = margins[1]
@@ -832,26 +885,32 @@ class AX12(Dynamixel):
 
     @property
     def cw_compliance_slope(self):
+        """Read the clockwise compliance slope register."""
         return self.read("cw_compliance_slope")
 
     @cw_compliance_slope.setter
     def cw_compliance_slope(self, slope):
+        """Write to the clockwise compliance slope register."""
         self.write("cw_compliance_slope", slope)
 
     @property
     def ccw_compliance_slope(self):
+        """Read the counterclockwise compliance slope register."""
         return self.read("ccw_compliance_slope")
 
     @ccw_compliance_slope.setter
     def ccw_compliance_slope(self, slope):
+        """Write to the counterclockwise compliance slope register."""
         self.write("ccw_compliance_slope", slope)
 
     @property
     def compliance_slopes(self):
+        """Return the clockwise and counterclockwise compliance slopes."""
         return self.cw_compliance_slope, self.ccw_compliance_slope
 
     @compliance_slopes.setter
     def compliance_slopes(self, slopes):
+        """Set the clockwise and counterclockwise compliance slopes."""
         try:
             cw_slope = slopes[0]
             ccw_slope = slopes[1]
@@ -865,6 +924,49 @@ class AX12(Dynamixel):
 
 
 class MX28(Dynamixel):
+    """
+    The MX-28 series of Dx.
+
+    Parameters
+    ----------
+    dx_id : int
+        The current ID of the Dx.
+    name : str, optional
+        The name of the Dx. Default is "MX-28".
+    port : str, optional
+        The port to which the Dx is connected. Default is "/dev/ttyUSB0".
+        Windows users can use COM ports instead.
+    baudrate : int, optional
+        The communication baudrate of the Dx. Default is 1,000,000.
+    timeout : int, optional
+        The length of time, in seconds, after which the communication with the
+        Dx is interrupted if no response is received. Default is 5.
+        seconds.
+
+    Attributes
+    ----------
+    dx_type : str
+        The type of the Dx.
+    name : str
+        The name of the Dx.
+    port : str
+        The port to which the Dx is connected.
+    ser : Serial
+        The serial device to communicate with the Dx.
+    errors : dict
+        Contains all error bits and their meanings.
+
+        **Dictionary format :** {id (int): name (str)}
+    dx_ids : list of int
+        Contains the IDs of all Dx currently connected.
+
+    Raises
+    ------
+    DynamixelError
+        If the ID is wrong or is already registered, or if the Dynamixel with
+        that ID is not an MX-28.
+
+    """
     _max_turn_angle = 360
 
     _register_minima = Dynamixel._register_minima.copy()
@@ -919,54 +1021,67 @@ class MX28(Dynamixel):
 
     @property
     def multiturn_offset(self):
+        """Read the multiturn offset register."""
         return self.read("multiturn_offset")
 
     @multiturn_offset.setter
     def multiturn_offset(self, value):
+        """Write to the multiturn offset register."""
         self.write("multiturn_offset", value)
 
     @property
     def resolution_divider(self):
+        """Read the resolution divider register."""
         return self.read("resolution_divider")
 
     @resolution_divider.setter
     def resolution_divider(self, value):
+        """Write to the resolution divider register."""
         self.write("resolution_divider", value)
 
     @property
     def p_gain(self):
+        """Read the Kp register for PID gains."""
         return self.read("p_gain")
 
     @p_gain.setter
     def p_gain(self, value):
+        """Write to the Kp register for PID gains."""
         self.write("p_gain", value)
 
     @property
     def i_gain(self):
+        """Read the Ki register for PID gains."""
         return self.read("i_gain")
 
     @i_gain.setter
     def i_gain(self, value):
+        """Write to the Ki register for PID gains."""
         self.write("i_gain", value)
 
     @property
     def d_gain(self):
+        """Read the Kd register for PID gains."""
         return self.read("d_gain")
 
     @d_gain.setter
     def d_gain(self, value):
+        """Write to the Kd register for PID gains."""
         self.write("d_gain", value)
 
     @property
-    def current(self):  # mA
+    def current(self):
+        """Get the current, in mA."""
         return self.read("present_current") * 10
 
     @property
     def goal_acceleration(self):
+        """Read the goal acceleration register."""
         return self.read("goal_acceleration")
 
     @goal_acceleration.setter
     def goal_acceleration(self, value):
+        """Write to the goal acceleration register."""
         self.write("goal_acceleration", value)
 
 if __name__ == "__main__":
