@@ -430,10 +430,10 @@ class Dynamixel(object):
         return self.ccw_limit_raw * alpha
 
     @ccw_limit.setter
-    def ccw_limit(self, limit):
+    def ccw_limit(self, deg):
         """Set the counterclockwise limit, in degrees."""
         alpha = self._max_turn_angle / self._register_maxima["ccw_limit"]
-        self.ccw_limit_raw / alpha
+        self.ccw_limit_raw = deg / alpha
 
     @property
     def limits(self):
